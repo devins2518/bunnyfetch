@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use plist::{from_reader_xml, Dictionary};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -12,8 +14,22 @@ pub fn username() -> String {
     var("USER").unwrap_or(String::from("Unknown"))
 }
 
+#[cfg(target_os = "macos")]
+pub fn hostname<'a>() -> String {
+    // UNWRAP: /etc/hostname will always exist and readable on unix machines
+    let f = File::open("/Library/Preferences/SystemConfiguration/preferences.plist").unwrap();
+    let reader = BufReader::new(f);
+    let plist = from_reader_xml::<BufReader<File>, Dictionary>(reader).unwrap();
+    let system = plist["System"].as_dictionary().unwrap();
+    // let system = plist["System"].into_dictionary().unwrap();
+    let network = system["Network"].as_dictionary().unwrap();
+    let hostnames = network["HostNames"].as_dictionary().unwrap();
+    // TODO: nasty
+    hostnames["LocalHostName"].as_string().unwrap().to_string()
+}
+
 // Use /etc/hostname to read hostname. $HOST does not appear to be set when called by rust
-#[cfg(target_family = "unix")]
+#[cfg(target_os = "linux")]
 pub fn hostname<'a>() -> String {
     // UNWRAP: /etc/hostname will always exist and readable on unix machines
     let f = File::open("/etc/hostname").unwrap();
@@ -36,7 +52,20 @@ pub fn hostname() -> String {
     }
 }
 
-#[cfg(target_family = "unix")]
+#[cfg(target_os = "macos")]
+pub fn os() -> String {
+    // UNWRAP: /etc/hostname will always exist and readable on unix machines
+    let f = File::open("/System/Library/CoreServices/SystemVersion.plist").unwrap();
+    let reader = BufReader::new(f);
+    let plist = from_reader_xml::<BufReader<File>, Dictionary>(reader).unwrap();
+    format!(
+        "{} {}",
+        plist["ProductName"].as_string().unwrap(),
+        plist["ProductUserVisibleVersion"].as_string().unwrap()
+    )
+}
+
+#[cfg(target_os = "linux")]
 pub fn os() -> String {
     // UNWRAP: /etc/os-release will always exist and readable on unix machines
     let f = File::open("/etc/os-release").unwrap();
@@ -81,7 +110,12 @@ pub fn os() -> String {
     }
 }
 
-#[cfg(target_family = "unix")]
+#[cfg(target_os = "macos")]
+pub fn kernel() -> String {
+    String::from("Darwin")
+}
+
+#[cfg(target_os = "linux")]
 pub fn kernel() -> String {
     // UNWRAP: /proc/version will always exist and readable on unix machines
     let f = File::open("/proc/version").unwrap();
@@ -113,7 +147,12 @@ pub fn kernel() -> String {
     }
 }
 
-#[cfg(target_family = "unix")]
+#[cfg(target_os = "macos")]
+pub fn de() -> String {
+    String::from("Aqua")
+}
+
+#[cfg(target_os = "linux")]
 pub fn de() -> String {
     // UNWRAP: handled safely with or clause
     var("XDG_SESSION_DESKTOP").unwrap_or(String::from("Unknown"))
